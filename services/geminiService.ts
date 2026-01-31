@@ -1,16 +1,16 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { Prescription } from "../types";
-
-// Always initialize outside if possible, assuming process.env.API_KEY is available
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import { Prescription } from "../types.ts";
 
 export const getLensRecommendation = async (
   prescription: Prescription,
   lifestyle: string
 ): Promise<string> => {
+  // Re-initialize to ensure it uses the latest process.env.API_KEY injected in this context
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   if (!process.env.API_KEY) {
-    return "Erro: Chave API do Gemini não configurada corretamente.";
+    return "Erro: Chave API do Gemini não disponível no ambiente.";
   }
 
   const prompt = `
@@ -25,7 +25,7 @@ export const getLensRecommendation = async (
     ${lifestyle}
 
     FORMATO DA RESPOSTA (Markdown):
-    1. Análise Técnica (Miopia, Astigmatismo, Presbiopia, etc).
+    1. Análise Técnica.
     2. Recomendação Principal.
     3. Opção Custo-Benefício.
     4. Tratamentos Essenciais.
@@ -34,13 +34,12 @@ export const getLensRecommendation = async (
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: prompt, // Simplified call format
     });
 
-    // Use property access instead of method call for .text
-    return response.text || "Não foi possível gerar uma recomendação no momento.";
+    return response.text || "O modelo não retornou uma resposta válida.";
   } catch (error) {
     console.error("Erro ao chamar Gemini:", error);
-    return "Ocorreu um erro ao conectar com o consultor IA. Tente novamente mais tarde.";
+    return "Ocorreu um erro ao conectar com o consultor IA. Verifique se a chave de API é válida.";
   }
 };

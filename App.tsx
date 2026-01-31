@@ -1,14 +1,14 @@
 
 import React from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
-import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
-import Orders from './components/Orders';
-import LensAdvisor from './components/LensAdvisor';
-import Customers from './components/Customers';
-import Reports from './components/Reports';
-import Inventory from './components/Inventory';
-import Finance from './components/Finance';
+import Layout from './components/Layout.tsx';
+import Dashboard from './components/Dashboard.tsx';
+import Orders from './components/Orders.tsx';
+import LensAdvisor from './components/LensAdvisor.tsx';
+import Customers from './components/Customers.tsx';
+import Reports from './components/Reports.tsx';
+import Inventory from './components/Inventory.tsx';
+import Finance from './components/Finance.tsx';
 
 function App() {
   return (
