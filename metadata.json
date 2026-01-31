@@ -1,0 +1,8 @@
+{
+  "name": "OptiGestão AI",
+  "description": "Sistema completo de gestão para óticas com assistente de vendas inteligente baseada em IA.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
