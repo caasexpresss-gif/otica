@@ -76,9 +76,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const fetchProfile = async (userId: string, email: string): Promise<boolean> => {
+    // 1. Check if already loaded to avoid redundant fetch
+    if (user?.id === userId && tenant?.id) {
+        console.log('✅ Auth: Profile already loaded for', userId);
+        return true;
+    }
+
     const tId = Math.random().toString(36).substring(7); // Trace ID
     console.log(`[${tId}] 🕒 fetchProfile START for ${userId}`);
     console.time(`fetchProfile-${tId}`);
+    
     try {
       console.log(`[${tId}] 👤 Querying profiles table...`);
       // Get Profile
@@ -130,13 +137,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log(`[${tId}] 🔄 State Updates DONE`);
       
       return true;
+      return true;
     } catch (error) {
-      console.error('❌ Critical Auth Error:', error);
-      // If profile missing, logout but ONLY if we are surely failing
-      // We don't want to logout if it's just a network glitch?
-      // For safety in this "stuck" scenario, let's allow retry without auto-logout immediately
-      // unless it's a critical logic error.
-      // But keeping original logic for consistency:
+      console.error(`[${tId}] ❌ Critical Auth Error:`, error);
+      // Only sign out if it's a real error (not network temporary)
+      // But for now, safety first:
       await supabase.auth.signOut();
       setUser(null);
       setTenant(null);
