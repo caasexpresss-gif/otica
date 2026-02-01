@@ -76,9 +76,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const fetchProfile = async (userId: string, email: string): Promise<boolean> => {
-    console.time('fetchProfile');
+    const tId = Math.random().toString(36).substring(7); // Trace ID
+    console.log(`[${tId}] 🕒 fetchProfile START for ${userId}`);
+    console.time(`fetchProfile-${tId}`);
     try {
-      console.log('👤 Fetching profile for:', userId);
+      console.log(`[${tId}] 👤 Querying profiles table...`);
       // Get Profile
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -87,12 +89,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .single();
 
       if (profileError) {
-          console.error('❌ Profile Fetch Error:', profileError);
+          console.error(`[${tId}] ❌ Profile Fetch Error:`, profileError);
           throw profileError;
       }
-      if (!profile) throw new Error("Profile not found");
+      if (!profile) {
+        console.error(`[${tId}] ❌ Profile not found`);
+        throw new Error("Profile not found");
+      }
+      console.log(`[${tId}] ✅ Profile found:`, profile.id);
 
-      console.log('🏢 Fetching tenant for:', profile.tenant_id);
+      console.log(`[${tId}] 🏢 Querying tenants table for ${profile.tenant_id}...`);
       // Get Tenant
       const { data: tenantData, error: tenantError } = await supabase
         .from('tenants')
@@ -100,10 +106,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .eq('id', profile.tenant_id)
         .single();
 
-      if (tenantError) throw tenantError;
-      if (!tenantData) throw new Error("Tenant not found");
+      if (tenantError) {
+        console.error(`[${tId}] ❌ Tenant Fetch Error:`, tenantError);
+        throw tenantError;
+      }
+      if (!tenantData) {
+        console.error(`[${tId}] ❌ Tenant not found`);
+        throw new Error("Tenant not found");
+      }
+      console.log(`[${tId}] ✅ Tenant found:`, tenantData.id);
 
-      console.log('✅ Auth Data Loaded');
+      console.log(`[${tId}] 🔄 State Updates START`);
 
       // Batch updates
       setTenant(tenantData as Tenant);
@@ -114,6 +127,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         role: profile.role as any,
         tenantId: profile.tenant_id
       });
+      console.log(`[${tId}] 🔄 State Updates DONE`);
       
       return true;
     } catch (error) {
@@ -130,7 +144,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return false;
     } finally {
       setIsLoading(false);
-      console.timeEnd('fetchProfile');
+      console.timeEnd(`fetchProfile-${tId}`);
+      console.log(`[${tId}] 🏁 fetchProfile END`);
     }
   };
 
