@@ -75,72 +75,63 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
 
-  const profilePromiseRef = React.useRef<Promise<boolean> | null>(null);
-
   const fetchProfile = async (userId: string, email: string): Promise<boolean> => {
-     // Deduping
-     if (profilePromiseRef.current) {
-         console.log('⚡ Auth: Reuse existing profile fetch promise');
-         return profilePromiseRef.current;
-     }
+    console.time('fetchProfile');
+    try {
+      console.log('👤 Fetching profile for:', userId);
+      // Get Profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-     console.time('fetchProfile');
-     const promise = (async (): Promise<boolean> => {
-         try {
-          console.log('👤 Fetching profile for:', userId);
-          // Get Profile
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
+      if (profileError) {
+          console.error('❌ Profile Fetch Error:', profileError);
+          throw profileError;
+      }
+      if (!profile) throw new Error("Profile not found");
 
-          if (profileError) {
-              console.error('❌ Profile Fetch Error:', profileError);
-              throw profileError;
-          }
-          if (!profile) throw new Error("Profile not found");
+      console.log('🏢 Fetching tenant for:', profile.tenant_id);
+      // Get Tenant
+      const { data: tenantData, error: tenantError } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('id', profile.tenant_id)
+        .single();
 
-          console.log('🏢 Fetching tenant for:', profile.tenant_id);
-          // Get Tenant
-          const { data: tenantData, error: tenantError } = await supabase
-            .from('tenants')
-            .select('*')
-            .eq('id', profile.tenant_id)
-            .single();
+      if (tenantError) throw tenantError;
+      if (!tenantData) throw new Error("Tenant not found");
 
-          if (tenantError) throw tenantError;
-          if (!tenantData) throw new Error("Tenant not found");
+      console.log('✅ Auth Data Loaded');
 
-          console.log('✅ Auth Data Loaded');
-
-          setTenant(tenantData as Tenant);
-          setUser({
-            id: userId,
-            email: email,
-            name: profile.name,
-            role: profile.role as any,
-            tenantId: profile.tenant_id
-          });
-          
-          return true;
-        } catch (error) {
-          console.error('❌ Critical Auth Error:', error);
-          // If profile missing, logout
-          await supabase.auth.signOut();
-          setUser(null);
-          setTenant(null);
-          setAuthError(error instanceof Error ? error.message : "Erro desconhecido ao carregar perfil.");
-          return false;
-        } finally {
-          setIsLoading(false);
-          console.timeEnd('fetchProfile');
-          profilePromiseRef.current = null; // Clear promise so next call can run
-        }
-    })();
-
-    profilePromiseRef.current = promise;
-    return promise;
+      // Batch updates
+      setTenant(tenantData as Tenant);
+      setUser({
+        id: userId,
+        email: email,
+        name: profile.name,
+        role: profile.role as any,
+        tenantId: profile.tenant_id
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Critical Auth Error:', error);
+      // If profile missing, logout but ONLY if we are surely failing
+      // We don't want to logout if it's just a network glitch?
+      // For safety in this "stuck" scenario, let's allow retry without auto-logout immediately
+      // unless it's a critical logic error.
+      // But keeping original logic for consistency:
+      await supabase.auth.signOut();
+      setUser(null);
+      setTenant(null);
+      setAuthError(error instanceof Error ? error.message : "Erro desconhecido ao carregar perfil.");
+      return false;
+    } finally {
+      setIsLoading(false);
+      console.timeEnd('fetchProfile');
+    }
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {

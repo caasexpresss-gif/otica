@@ -23,13 +23,27 @@ const Login: React.FC = () => {
     setError('');
     setIsLoading(true);
 
-    const success = await login(email, password);
+    try {
+      // Force timeout after 10 seconds to prevent infinite spinner
+      const timeoutPromise = new Promise<boolean>((_, reject) => {
+        setTimeout(() => reject(new Error('Tempo limite de conexão excedido. Tente novamente.')), 10000);
+      });
 
-    if (!success) {
-      console.warn('⚠️ Login returned false');
-      setError('Falha ao autenticar.');
+      const success = await Promise.race([
+        login(email, password),
+        timeoutPromise
+      ]);
+
+      if (!success) {
+        console.warn('⚠️ Login returned false');
+        setError('Falha ao autenticar.');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao tentar fazer login.');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
