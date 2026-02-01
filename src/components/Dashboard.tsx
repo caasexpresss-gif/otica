@@ -1,8 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ShoppingBag, AlertCircle, Gift, ArrowRight, Trophy, Package } from 'lucide-react';
-import { SALES_DATA_MONTHLY, SALES_DATA_WEEKLY, SALES_DATA_DAILY } from '../constants';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { OrderStatus } from '../types';
@@ -27,14 +26,58 @@ const Dashboard: React.FC = () => {
   const topProducts = [...products].sort((a, b) => b.soldCount - a.soldCount).slice(0, 3);
   const topEmployees = [...employees].sort((a, b) => b.salesTotal - a.salesTotal);
 
+  // Calculate chart data from real transactions
+  const chartData = useMemo(() => {
+    const salesTransactions = transactions.filter(t => t.type === 'IN' && t.status === 'PAID');
+    
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+    // Monthly data
+    const monthly = monthNames.map((name, index) => {
+      const monthSales = salesTransactions
+        .filter(t => new Date(t.date).getMonth() === index)
+        .reduce((sum, t) => sum + t.amount, 0);
+      return { name, value: monthSales };
+    });
+
+    // Weekly data (last 4 weeks)
+    const now = new Date();
+    const weekly = [1, 2, 3, 4].map(weekNum => {
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - (weekNum * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 7);
+      
+      const weekSales = salesTransactions
+        .filter(t => {
+          const tDate = new Date(t.date);
+          return tDate >= weekStart && tDate < weekEnd;
+        })
+        .reduce((sum, t) => sum + t.amount, 0);
+      return { name: `Sem ${5 - weekNum}`, value: weekSales };
+    }).reverse();
+
+    // Daily data (current week)
+    const daily = dayNames.map((name, index) => {
+      const daySales = salesTransactions
+        .filter(t => new Date(t.date).getDay() === index)
+        .reduce((sum, t) => sum + t.amount, 0);
+      return { name, value: daySales };
+    });
+
+    return { monthly, weekly, daily };
+  }, [transactions]);
+
   const getChartData = () => {
     switch (timeRange) {
-      case 'daily': return SALES_DATA_DAILY;
-      case 'weekly': return SALES_DATA_WEEKLY;
-      case 'monthly': return SALES_DATA_MONTHLY;
-      default: return SALES_DATA_MONTHLY;
+      case 'daily': return chartData.daily;
+      case 'weekly': return chartData.weekly;
+      case 'monthly': return chartData.monthly;
+      default: return chartData.monthly;
     }
   };
+
 
   return (
     <div className="space-y-6">
