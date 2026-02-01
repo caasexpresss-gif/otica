@@ -3,6 +3,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, Users, ShoppingBag, Glasses, BrainCircuit, Menu, X, FileBarChart, Package, DollarSign, LogOut, Briefcase } from 'lucide-react';
+import { BirthdayNotification } from './BirthdayNotification';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -108,12 +109,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile Header */}
         <header className="flex items-center justify-between px-6 py-4 bg-white border-b lg:hidden">
           <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600">
             <Menu className="w-6 h-6" />
           </button>
           <span className="font-bold text-gray-800">{tenant?.name || 'OptiSaaS'}</span>
-          <div className="w-6" /> {/* Spacer */}
+          <div className="flex items-center gap-2">
+             <BirthdayNotification />
+          </div> 
+        </header>
+
+        {/* Desktop Top Bar (New) */}
+        <header className="hidden lg:flex items-center justify-between px-8 py-4 bg-white border-b shadow-sm">
+           <h2 className="text-xl font-semibold text-gray-800">
+             {navItems.find(item => isActive(item.path))?.label || 'OptiSaaS'}
+           </h2>
+           <div className="flex items-center gap-4">
+              <BirthdayNotification />
+           </div>
         </header>
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">

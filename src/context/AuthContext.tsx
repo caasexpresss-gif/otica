@@ -24,16 +24,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Safety timeout: stop loading after 8 seconds max
+    // Safety timeout: stop loading after 15 seconds max (increased for slow connections)
     const safetyTimeout = setTimeout(() => {
         setIsLoading((loading) => {
             if (loading) {
                 console.warn("Auth loading timed out - forcing release.");
+                setAuthError("Tempo limite excedido. O servidor pode estar lento ou pausado.");
                 return false;
             }
             return loading;
         });
-    }, 8000);
+    }, 15000);
 
     const loadSession = async () => {
       console.log('🔄 Auth: Loading session...');
@@ -75,6 +76,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
 
+  // Deduping promise ref
+  const profilePromiseRef = React.useRef<Promise<boolean> | null>(null);
+
   const fetchProfile = async (userId: string, email: string): Promise<boolean> => {
     // 1. Check if already loaded to avoid redundant fetch
     if (user?.id === userId && tenant?.id) {
@@ -82,76 +86,77 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return true;
     }
 
+    // 2. Check operational promise (deduping)
+    if (profilePromiseRef.current) {
+         console.log('🔄 Auth: Joining existing fetchProfile operation...');
+         return profilePromiseRef.current;
+    }
+
     const tId = Math.random().toString(36).substring(7); // Trace ID
     console.log(`[${tId}] 🕒 fetchProfile START for ${userId}`);
-    console.time(`fetchProfile-${tId}`);
     
-    try {
-      console.log(`[${tId}] 👤 Querying profiles table...`);
-      // Get Profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+    // Create the promise and store it
+    const promise = (async () => {
+        console.time(`fetchProfile-${tId}`);
+        try {
+          console.log(`[${tId}] 👤 Querying profiles table...`);
+          // Get Profile
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
 
-      if (profileError) {
-          console.error(`[${tId}] ❌ Profile Fetch Error:`, profileError);
-          throw profileError;
-      }
-      if (!profile) {
-        console.error(`[${tId}] ❌ Profile not found`);
-        throw new Error("Profile not found");
-      }
-      console.log(`[${tId}] ✅ Profile found:`, profile.id);
+          if (profileError) throw profileError;
+          if (!profile) throw new Error("Profile not found");
+          
+          console.log(`[${tId}] ✅ Profile found:`, profile.id);
 
-      console.log(`[${tId}] 🏢 Querying tenants table for ${profile.tenant_id}...`);
-      // Get Tenant
-      const { data: tenantData, error: tenantError } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('id', profile.tenant_id)
-        .single();
+          console.log(`[${tId}] 🏢 Querying tenants table for ${profile.tenant_id}...`);
+          // Get Tenant
+          const { data: tenantData, error: tenantError } = await supabase
+            .from('tenants')
+            .select('*')
+            .eq('id', profile.tenant_id)
+            .single();
 
-      if (tenantError) {
-        console.error(`[${tId}] ❌ Tenant Fetch Error:`, tenantError);
-        throw tenantError;
-      }
-      if (!tenantData) {
-        console.error(`[${tId}] ❌ Tenant not found`);
-        throw new Error("Tenant not found");
-      }
-      console.log(`[${tId}] ✅ Tenant found:`, tenantData.id);
+          if (tenantError) throw tenantError;
+          if (!tenantData) throw new Error("Tenant not found");
+          
+          console.log(`[${tId}] ✅ Tenant found:`, tenantData.id);
 
-      console.log(`[${tId}] 🔄 State Updates START`);
+          console.log(`[${tId}] 🔄 State Updates START`);
 
-      // Batch updates
-      setTenant(tenantData as Tenant);
-      setUser({
-        id: userId,
-        email: email,
-        name: profile.name,
-        role: profile.role as any,
-        tenantId: profile.tenant_id
-      });
-      console.log(`[${tId}] 🔄 State Updates DONE`);
-      
-      return true;
-      return true;
-    } catch (error) {
-      console.error(`[${tId}] ❌ Critical Auth Error:`, error);
-      // Only sign out if it's a real error (not network temporary)
-      // But for now, safety first:
-      await supabase.auth.signOut();
-      setUser(null);
-      setTenant(null);
-      setAuthError(error instanceof Error ? error.message : "Erro desconhecido ao carregar perfil.");
-      return false;
-    } finally {
-      setIsLoading(false);
-      console.timeEnd(`fetchProfile-${tId}`);
-      console.log(`[${tId}] 🏁 fetchProfile END`);
-    }
+          // Batch updates
+          setTenant(tenantData as Tenant);
+          setUser({
+            id: userId,
+            email: email,
+            name: profile.name,
+            role: profile.role as any,
+            tenantId: profile.tenant_id
+          });
+          console.log(`[${tId}] 🔄 State Updates DONE`);
+          
+          return true;
+        } catch (error) {
+          console.error(`[${tId}] ❌ Critical Auth Error:`, error);
+          await supabase.auth.signOut();
+          setUser(null);
+          setTenant(null);
+          setAuthError(error instanceof Error ? error.message : "Erro desconhecido ao carregar perfil.");
+          return false;
+        } finally {
+          setIsLoading(false);
+          console.timeEnd(`fetchProfile-${tId}`);
+          console.log(`[${tId}] 🏁 fetchProfile END`);
+          // Clear promise ref so future calls can rewrite
+          profilePromiseRef.current = null;
+        }
+    })();
+
+    profilePromiseRef.current = promise;
+    return promise;
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
