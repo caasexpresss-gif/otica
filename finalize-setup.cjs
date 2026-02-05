@@ -1,15 +1,29 @@
 
+require('dotenv').config();
+
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = 'https://vhoezlyrmkgkddkcfqdk.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZob2V6bHlybWtna2Rka2NmcWRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MTc3NzksImV4cCI6MjA4NTQ5Mzc3OX0.4gIXoOcGfXhpitFV82P5pOfbXBrHXhOC3Tuk-txpxuA';
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.error('Erro: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY (ou VITE_SUPABASE_ANON_KEY) precisam estar definidos nas variáveis de ambiente.');
+    process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const userId = 'd0e7041f-8939-4467-8739-bb764836ca26'; // ID do admin
 
 async function finalizeSetup() {
+    // Pegar senha do ambiente ou usar placeholder seguro (idealmente nunca hardcoded)
+    const password = process.env.ADMIN_PASSWORD;
+
+    if (!password) {
+        console.error('Erro: ADMIN_PASSWORD não definida.');
+        process.exit(1);
+    }
     console.log('🔧 Finalizing Setup for novo_admin_2...');
     const email = 'novo_admin_2@optisaas.com';
-    const password = 'testpassword123';
     
     // 1. Sign In
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({

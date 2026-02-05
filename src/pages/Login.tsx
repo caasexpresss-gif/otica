@@ -21,28 +21,23 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
+    
+    // Safety check: Don't try to log in if already authenticated
+    if (isAuthenticated) {
+        navigate('/');
+        return;
+    }
 
     try {
-      // Force timeout after 10 seconds to prevent infinite spinner
-      const timeoutPromise = new Promise<boolean>((_, reject) => {
-        setTimeout(() => reject(new Error('Tempo limite de conexão excedido. Tente novamente.')), 10000);
-      });
-
-      const success = await Promise.race([
-        login(email, password),
-        timeoutPromise
-      ]);
-
+      const { success, error: loginError } = await login(email, password);
+      
       if (!success) {
-        console.warn('⚠️ Login returned false');
-        setError('Falha ao autenticar.');
+        setError(loginError || 'Falha ao autenticar.');
       }
+      // Success is handled by the useEffect redirect
     } catch (err) {
       console.error('Login error:', err);
-      setError(err instanceof Error ? err.message : 'Erro ao tentar fazer login.');
-    } finally {
-      setIsLoading(false);
+      setError('Erro inesperado ao fazer login.');
     }
   };
 

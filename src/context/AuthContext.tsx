@@ -7,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   tenant: Tenant | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, password: string, storeName: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   isLoading: boolean;
@@ -17,53 +17,37 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // ... (keep state)
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Safety timeout: stop loading after 15 seconds max (increased for slow connections)
-    const safetyTimeout = setTimeout(() => {
-        setIsLoading((loading) => {
-            if (loading) {
-                console.warn("Auth loading timed out - forcing release.");
-                setAuthError("Tempo limite excedido. O servidor pode estar lento ou pausado.");
-                return false;
-            }
-            return loading;
-        });
-    }, 15000);
-
-    const loadSession = async () => {
-      console.log('🔄 Auth: Loading session...');
+    // Initial Session Check
+    const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-            console.log('✅ Auth: Session found', session.user.id);
-            await fetchProfile(session.user.id, session.user.email!);
-        } else {
-            console.log('ℹ️ Auth: No session');
-            setIsLoading(false);
+          await fetchProfile(session.user.id, session.user.email!);
         }
-      } catch (err) {
-        console.error('❌ Auth: Load session error', err);
+      } catch (error) {
+        console.error("Auth Init Error:", error);
+      } finally {
         setIsLoading(false);
       }
     };
 
-    loadSession();
+    initializeAuth();
 
+    // Listen to Auth Changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`🔔 Auth Event: ${event}`);
-      if (session?.user) {
-        // Only fetch if not already loaded/loading? 
-        // For simplicity, we fetch to ensure sync.
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        setIsLoading(true);
         await fetchProfile(session.user.id, session.user.email!);
-      } else {
+        setIsLoading(false);
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setTenant(null);
         setIsLoading(false);
@@ -71,120 +55,78 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => {
-        subscription.unsubscribe();
-        clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
     };
   }, []);
 
-  // Deduping promise ref
-  const profilePromiseRef = React.useRef<Promise<boolean> | null>(null);
+  const fetchProfile = async (userId: string, email: string) => {
+    try {
+      console.log('👤 Fetching profile for:', userId);
+      
+      // Get Profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-  const fetchProfile = async (userId: string, email: string): Promise<boolean> => {
-    // 1. Check if already loaded to avoid redundant fetch
-    if (user?.id === userId && tenant?.id) {
-        console.log('✅ Auth: Profile already loaded for', userId);
-        return true;
+      if (profileError || !profile) {
+        console.error('Profile error:', profileError);
+        throw new Error("Perfil não encontrado.");
+      }
+
+      // Get Tenant
+      const { data: tenantData, error: tenantError } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('id', profile.tenant_id)
+        .single();
+
+      if (tenantError || !tenantData) {
+        console.error('Tenant error:', tenantError);
+        throw new Error("Tenant não encontrado.");
+      }
+
+      setTenant(tenantData as Tenant);
+      setUser({
+        id: userId,
+        email: email,
+        name: profile.name,
+        role: profile.role as any,
+        tenantId: profile.tenant_id
+      });
+      console.log('✅ Auth State Updated');
+
+    } catch (error) {
+      console.error('❌ Critical Auth Error:', error);
+      setAuthError(error instanceof Error ? error.message : "Erro ao carregar sessão");
+      // Optional: Sign out if profile fails
+      // await supabase.auth.signOut();
     }
-
-    // 2. Check operational promise (deduping)
-    if (profilePromiseRef.current) {
-         console.log('🔄 Auth: Joining existing fetchProfile operation...');
-         return profilePromiseRef.current;
-    }
-
-    const tId = Math.random().toString(36).substring(7); // Trace ID
-    console.log(`[${tId}] 🕒 fetchProfile START for ${userId}`);
-    
-    // Create the promise and store it
-    const promise = (async () => {
-        console.time(`fetchProfile-${tId}`);
-        try {
-          console.log(`[${tId}] 👤 Querying profiles table...`);
-          // Get Profile
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
-
-          if (profileError) throw profileError;
-          if (!profile) throw new Error("Profile not found");
-          
-          console.log(`[${tId}] ✅ Profile found:`, profile.id);
-
-          console.log(`[${tId}] 🏢 Querying tenants table for ${profile.tenant_id}...`);
-          // Get Tenant
-          const { data: tenantData, error: tenantError } = await supabase
-            .from('tenants')
-            .select('*')
-            .eq('id', profile.tenant_id)
-            .single();
-
-          if (tenantError) throw tenantError;
-          if (!tenantData) throw new Error("Tenant not found");
-          
-          console.log(`[${tId}] ✅ Tenant found:`, tenantData.id);
-
-          console.log(`[${tId}] 🔄 State Updates START`);
-
-          // Batch updates
-          setTenant(tenantData as Tenant);
-          setUser({
-            id: userId,
-            email: email,
-            name: profile.name,
-            role: profile.role as any,
-            tenantId: profile.tenant_id
-          });
-          console.log(`[${tId}] 🔄 State Updates DONE`);
-          
-          return true;
-        } catch (error) {
-          console.error(`[${tId}] ❌ Critical Auth Error:`, error);
-          await supabase.auth.signOut();
-          setUser(null);
-          setTenant(null);
-          setAuthError(error instanceof Error ? error.message : "Erro desconhecido ao carregar perfil.");
-          return false;
-        } finally {
-          setIsLoading(false);
-          console.timeEnd(`fetchProfile-${tId}`);
-          console.log(`[${tId}] 🏁 fetchProfile END`);
-          // Clear promise ref so future calls can rewrite
-          profilePromiseRef.current = null;
-        }
-    })();
-
-    profilePromiseRef.current = promise;
-    return promise;
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
-    setAuthError(null); // Clear previous errors
-    console.time('loginTotal');
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    setAuthError(null);
+    
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
+      if (error) throw error;
+      return { success: true };
+
+    } catch (error: any) {
       console.error('Login error:', error.message);
-      setAuthError(error.message);
-      setIsLoading(false);
-      console.timeEnd('loginTotal');
-      return false;
+      const msg = error.message === 'Invalid login credentials' 
+        ? 'Email ou senha incorretos' 
+        : 'Erro ao fazer login';
+      setAuthError(msg);
+      setIsLoading(false); // Only stop loading on error, success is handled by onAuthStateChange
+      return { success: false, error: msg };
     }
-    
-    // Explicitly wait for profile to load before returning
-    let profileSuccess = false;
-    if (data.session?.user) {
-        // This will now reuse the promise if onAuthStateChange already triggered it
-        profileSuccess = await fetchProfile(data.session.user.id, data.session.user.email!);
-    }
-    
-    console.timeEnd('loginTotal');
-    return profileSuccess; 
   };
 
   const register = async (
@@ -240,11 +182,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setTenant(null);
-    setAuthError(null);
+    // State clearing handled by onAuthStateChange
   };
-
 
   return (
     <AuthContext.Provider value={{
