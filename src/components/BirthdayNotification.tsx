@@ -1,10 +1,12 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Gift, X, Phone, Calendar } from 'lucide-react';
 
 export const BirthdayNotification: React.FC = () => {
   const { customers } = useData();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
 
   // Filter birthdays for today (Day/Month match, ignore Year)
@@ -73,13 +75,20 @@ export const BirthdayNotification: React.FC = () => {
 
                  return (
                   <div key={customer.id} className="px-4 py-3 hover:bg-gray-50 flex items-center justify-between border-b border-gray-100 last:border-0">
-                    <div>
+                    <div 
+                        onClick={() => {
+                            setIsOpen(false);
+                            navigate(`/customers`); // Ideally navigate to /customers?id={id} but list filtering is simpler for now or if customer module supports detail view
+                        }}
+                        className="cursor-pointer flex-1"
+                    >
                       <p className="font-semibold text-gray-800">{customer.name}</p>
                       <div className="flex items-center text-xs text-gray-500 gap-2 mt-0.5">
                         <span className="flex items-center gap-1 bg-red-50 text-red-600 px-1.5 py-0.5 rounded">
                            <Calendar className="w-3 h-3" />
                            {age} anos
                         </span>
+                        <span className="text-[10px] text-blue-500 hover:underline">Ver perfil</span>
                       </div>
                     </div>
                     

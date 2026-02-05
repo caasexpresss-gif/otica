@@ -1,12 +1,14 @@
 
 import React, { useState } from 'react';
-import { MOCK_CUSTOMERS, MOCK_ORDERS } from '../constants';
+import { useData } from '../context/DataContext';
+import { MOCK_ORDERS } from '../constants';
 import { Customer, Order } from '../types';
 import { Cake, Gift, Calendar, MessageCircle, Phone, TrendingUp, DollarSign, ShoppingBag, FileText, Filter, Search, User, Mail, Download, CheckCircle } from 'lucide-react';
 
 type ReportType = 'birthdays' | 'sales';
 
 const Reports: React.FC = () => {
+  const { customers } = useData();
   const [activeReport, setActiveReport] = useState<ReportType>('birthdays');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -44,7 +46,7 @@ const Reports: React.FC = () => {
     return now.getFullYear() - birthDate.getFullYear();
   };
 
-  const birthdayCustomers = MOCK_CUSTOMERS.filter(customer => {
+  const birthdayCustomers = customers.filter(customer => {
     if (!customer.birthDate) return false;
     const parts = customer.birthDate.split('-');
     const month = parseInt(parts[1], 10) - 1;
@@ -57,7 +59,7 @@ const Reports: React.FC = () => {
     return dayA - dayB;
   });
 
-  const birthdaysToday = MOCK_CUSTOMERS.filter(c => {
+  const birthdaysToday = customers.filter(c => {
     if (!c.birthDate) return false;
     const parts = c.birthDate.split('-');
     return (parseInt(parts[1], 10) - 1 === currentMonthIndex) && (parseInt(parts[2], 10) === currentDay);
@@ -202,7 +204,7 @@ const Reports: React.FC = () => {
                             <div>
                                 <p className="text-sm text-gray-500 font-medium">Total em {months[selectedMonth]}</p>
                                 <h3 className="text-2xl font-bold text-gray-800">
-                                    {MOCK_CUSTOMERS.filter(c => c.birthDate && parseInt(c.birthDate.split('-')[1], 10) - 1 === selectedMonth).length}
+                                    {customers.filter(c => c.birthDate && parseInt(c.birthDate.split('-')[1], 10) - 1 === selectedMonth).length}
                                 </h3>
                             </div>
                         </div>
