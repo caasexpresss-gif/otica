@@ -3,12 +3,14 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { DollarSign, ArrowUpCircle, ArrowDownCircle, Calendar, Search, CheckCircle, AlertCircle, FileText, Lock, AlertTriangle } from 'lucide-react';
 import DebtManagement from './finance/DebtManagement';
+import AddTransactionModal from './finance/AddTransactionModal';
 
 type Tab = 'cash-flow' | 'payable' | 'receivable' | 'debtors' | 'reconciliation';
 
 const Finance: React.FC = () => {
-  const { transactions } = useData();
+  const { transactions, addTransaction } = useData();
   const [activeTab, setActiveTab] = useState<Tab>('cash-flow');
+  const [showAddModal, setShowAddModal] = useState(false);
   
   // KPIs
   const totalIn = transactions.filter(t => t.type === 'IN' && t.status === 'PAID').reduce((acc, t) => acc + t.amount, 0);
@@ -43,7 +45,10 @@ const Finance: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-gray-800">Gestão Financeira</h1>
-        <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm font-medium">
+        <button 
+            onClick={() => setShowAddModal(true)}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm font-medium"
+        >
             <DollarSign className="w-4 h-4" />
             Nova Movimentação
         </button>
@@ -227,6 +232,17 @@ const Finance: React.FC = () => {
             </div>
           )}
       </div>
+      </div>
+      
+      {showAddModal && (
+        <AddTransactionModal 
+            onClose={() => setShowAddModal(false)}
+            onSave={(transaction) => {
+                addTransaction(transaction as any); // Type assertion if needed, but safe given Omit
+                setShowAddModal(false);
+            }}
+        />
+      )}
     </div>
   );
 };
