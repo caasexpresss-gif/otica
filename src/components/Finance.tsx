@@ -232,7 +232,7 @@ const Finance: React.FC = () => {
             </div>
           )}
       </div>
-      </div>
+
       
       {showAddModal && (
         <AddTransactionModal 
