@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { Customer, Order, Product, FinancialTransaction, Employee, Supplier } from '../types';
+import { Customer, Order, Product, FinancialTransaction, Employee, Supplier, Prescription } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { MOCK_EMPLOYEES } from '../constants';
@@ -31,6 +31,8 @@ interface DataContextType {
   addSupplier: (supplier: Supplier) => void;
   removeSupplier: (id: string) => void;
 
+  addPrescription: (customerId: string, prescription: Prescription) => void;
+
   employees: Employee[];
 }
 
@@ -58,28 +60,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setSuppliers([]);
     }
   }, [isAuthenticated, user?.tenantId]);
-
-  const loadData = async () => {
-    // 1. Customers
-    const { data: custData } = await supabase.from('customers').select('*');
-    if (custData) setCustomers(custData.map(mapCustomerFromDB));
-
-    // 2. Products
-    const { data: prodData } = await supabase.from('products').select('*');
-    if (prodData) setProducts(prodData.map(mapProductFromDB));
-
-    // 3. Orders
-    const { data: ordData } = await supabase.from('orders').select('*');
-    if (ordData) setOrders(ordData.map(mapOrderFromDB));
-
-    // 4. Transactions
-    const { data: transData } = await supabase.from('financial_transactions').select('*');
-    if (transData) setTransactions(transData.map(mapTransactionFromDB));
-
-    // 5. Suppliers
-    const { data: suppData } = await supabase.from('suppliers').select('*');
-    if (suppData) setSuppliers(suppData.map(mapSupplierFromDB));
-  };
 
   // -- Mappers --
   const mapCustomerFromDB = (db: any): Customer => ({
@@ -148,6 +128,68 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       email: db.email
   });
 
+  const mapPrescriptionFromDB = (db: any): Prescription => ({
+      id: db.id,
+      date: db.date,
+      doctorName: db.doctor_name,
+      od: {
+        spherical: db.od_spherical,
+        cylinder: db.od_cylinder,
+        axis: db.od_axis,
+        add: db.od_add,
+        pd: db.od_pd,
+        height: db.od_height
+      },
+      oe: {
+        spherical: db.oe_spherical,
+        cylinder: db.oe_cylinder,
+        axis: db.oe_axis,
+        add: db.oe_add,
+        pd: db.oe_pd,
+        height: db.oe_height
+      },
+      notes: db.notes
+  });
+
+  const loadData = async () => {
+    // 1. Customers
+    const { data: custData } = await supabase.from('customers').select('*');
+
+    // 2. Products
+    const { data: prodData } = await supabase.from('products').select('*');
+    if (prodData) setProducts(prodData.map(mapProductFromDB));
+
+    // 3. Orders
+    const { data: ordData } = await supabase.from('orders').select('*');
+    if (ordData) setOrders(ordData.map(mapOrderFromDB));
+
+    // 4. Transactions
+    const { data: transData } = await supabase.from('financial_transactions').select('*');
+    if (transData) setTransactions(transData.map(mapTransactionFromDB));
+
+    // 5. Suppliers
+    const { data: suppData } = await supabase.from('suppliers').select('*');
+    if (suppData) setSuppliers(suppData.map(mapSupplierFromDB));
+
+    // 6. Prescriptions (Fetch all and map to customers)
+    const { data: prescData } = await supabase.from('prescriptions').select('*');
+    if (custData && prescData) {
+        const customersWithPrescriptions = custData.map(c => {
+             const cPrescriptions = prescData
+                .filter(p => p.customer_id === c.id)
+                .map(mapPrescriptionFromDB);
+             
+             return {
+                 ...mapCustomerFromDB(c),
+                 prescriptions: cPrescriptions
+             };
+        });
+        setCustomers(customersWithPrescriptions);
+    } else if (custData) {
+        setCustomers(custData.map(mapCustomerFromDB));
+    }
+  };
+
   // -- Actions --
 
   const addCustomer = async (customer: Customer) => {
@@ -158,6 +200,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         phone: customer.phone,
         email: customer.email,
         cpf: customer.cpf,
+        rg: customer.rg,
+        birth_date: customer.birthDate,
+        gender: customer.gender,
         profession: customer.profession,
         address: customer.address,
         credit_limit: customer.creditLimit,
@@ -178,6 +223,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         cpf: customer.cpf,
         profession: customer.profession,
         address: customer.address,
+        birth_date: customer.birthDate,
+        gender: customer.gender,
+        rg: customer.rg,
         credit_limit: customer.creditLimit,
         credit_status: customer.creditStatus,
         notes: customer.notes
@@ -299,6 +347,46 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const addPrescription = async (customerId: string, prescription: Prescription) => {
+      // Note: Prescription type has 'id', but we let DB generate it? 
+      // Usually UI generates temp ID. We should omit ID for insert or use it if UUID.
+      // Assuming customerId is passed separately or inside prescription? 
+      // The current Prescription interface doesn't have customerId.
+      
+      const dbPayload = {
+          customer_id: customerId,
+          date: prescription.date,
+          doctor_name: prescription.doctorName,
+          od_spherical: prescription.od.spherical,
+          od_cylinder: prescription.od.cylinder,
+          od_axis: prescription.od.axis,
+          od_add: prescription.od.add,
+          od_pd: prescription.od.pd,
+          od_height: prescription.od.height,
+          oe_spherical: prescription.oe.spherical,
+          oe_cylinder: prescription.oe.cylinder,
+          oe_axis: prescription.oe.axis,
+          oe_add: prescription.oe.add,
+          oe_pd: prescription.oe.pd,
+          oe_height: prescription.oe.height,
+          notes: prescription.notes
+      };
+
+      const { data, error } = await supabase.from('prescriptions').insert([dbPayload]).select().single();
+      
+      if (data && !error) {
+          const newPrescription = mapPrescriptionFromDB(data);
+          setCustomers(prev => prev.map(c => {
+              if (c.id === customerId) {
+                  return { ...c, prescriptions: [newPrescription, ...c.prescriptions] };
+              }
+              return c;
+          }));
+      } else {
+          console.error("Error adding prescription:", error);
+      }
+  };
+
   const removeSupplier = async (id: string) => {
     const { error } = await supabase.from('suppliers').delete().eq('id', id);
     if (!error) {
@@ -313,6 +401,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       products, setProducts, updateProductStock, addProduct,
       transactions, setTransactions, addTransaction,
       suppliers, setSuppliers, addSupplier, removeSupplier,
+      addPrescription, // Exposed
       removeOrder,
       employees
     }}>
