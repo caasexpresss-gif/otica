@@ -19,6 +19,7 @@ interface DataContextType {
 
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+  addProduct: (product: Omit<Product, 'id' | 'soldCount'>) => void;
   updateProductStock: (id: string, quantity: number) => void;
 
   transactions: FinancialTransaction[];
@@ -243,6 +244,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const addProduct = async (product: Omit<Product, 'id' | 'soldCount'>) => {
+    if (!user?.tenantId) return;
+    const dbPayload = {
+        tenant_id: user.tenantId,
+        code: product.code,
+        barcode: product.barcode,
+        name: product.name,
+        category: product.category,
+        brand: product.brand,
+        cost_price: product.costPrice,
+        sales_price: product.salesPrice,
+        stock_level: product.stockLevel,
+        min_stock_level: product.minStockLevel,
+        sold_count: 0
+    };
+    const { data, error } = await supabase.from('products').insert([dbPayload]).select().single();
+    if (data && !error) {
+        setProducts(prev => [...prev, mapProductFromDB(data)]);
+    }
+  };
+
   const addTransaction = async (transaction: FinancialTransaction) => {
     if (!user?.tenantId) return;
     const dbPayload = {
@@ -288,7 +310,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <DataContext.Provider value={{
       customers, setCustomers, addCustomer, updateCustomer,
       orders, setOrders, addOrder, updateOrder,
-      products, setProducts, updateProductStock,
+      products, setProducts, updateProductStock, addProduct,
       transactions, setTransactions, addTransaction,
       suppliers, setSuppliers, addSupplier, removeSupplier,
       removeOrder,

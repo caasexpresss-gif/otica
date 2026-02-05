@@ -5,14 +5,16 @@ import { Product } from '../types';
 import { Search, Plus, Filter, Package, AlertCircle, Printer, Truck, Tag } from 'lucide-react';
 import SupplierManagement from './inventory/SupplierManagement';
 import BarcodeGenerator from './inventory/BarcodeGenerator';
+import AddProductModal from './inventory/AddProductModal';
 
 type TabMode = 'products' | 'suppliers';
 
 const Inventory: React.FC = () => {
-    const { products, setProducts } = useData();
+    const { products, setProducts, addProduct } = useData();
     const [activeTab, setActiveTab] = useState<TabMode>('products');
     const [searchTerm, setSearchTerm] = useState('');
     const [showBarcodeGenerator, setShowBarcodeGenerator] = useState(false);
+    const [showAddProductModal, setShowAddProductModal] = useState(false);
 
     // Filter Logic
     const filteredProducts = products.filter(p => 
@@ -35,7 +37,10 @@ const Inventory: React.FC = () => {
                         <Printer className="w-4 h-4" />
                         Etiquetas
                     </button>
-                    <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm font-medium">
+                    <button 
+                        onClick={() => setShowAddProductModal(true)}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm font-medium"
+                    >
                         <Plus className="w-4 h-4" />
                         Novo Produto
                     </button>
@@ -172,6 +177,16 @@ const Inventory: React.FC = () => {
             {/* Modals */}
             {showBarcodeGenerator && (
                 <BarcodeGenerator onClose={() => setShowBarcodeGenerator(false)} />
+            )}
+            
+            {showAddProductModal && (
+                <AddProductModal 
+                    onClose={() => setShowAddProductModal(false)}
+                    onSave={(newProduct) => {
+                        addProduct(newProduct);
+                        setShowAddProductModal(false);
+                    }}
+                />
             )}
         </div>
     );
